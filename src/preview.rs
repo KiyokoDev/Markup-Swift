@@ -6,7 +6,7 @@ use eframe::egui::{
     containers::scroll_area::ScrollBarVisibility,
     text::{LayoutJob, TextFormat},
 };
-use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{Alignment, CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 
 use crate::app::App;
 
@@ -21,6 +21,15 @@ static THEME_SET: LazyLock<syntect::highlighting::ThemeSet> = LazyLock::new(|| {
 struct MdCtx {
     list_stack: Vec<bool>,
     quote_depth: usize,
+}
+
+struct TableState {
+    alignments: Vec<Alignment>,
+    head: Vec<Vec<Vec<(String, ActiveFormats)>>>,
+    rows: Vec<Vec<Vec<(String, ActiveFormats)>>>,
+    current_row: Vec<Vec<(String, ActiveFormats)>>,
+    current_cell: Vec<(String, ActiveFormats)>,
+    in_head: bool,
 }
 
 #[derive(Clone, Default)]
@@ -87,6 +96,7 @@ pub fn show(ui: &mut Ui, app: &mut App, focused: bool) {
                 let mut in_code = false;
                 let mut code_text = String::new();
                 let mut code_lang = String::new();
+                let mut table_state: Option<TableState> = None;
 
                 for event in parser {
                     match event {
@@ -122,6 +132,32 @@ pub fn show(ui: &mut Ui, app: &mut App, focused: bool) {
                             Tag::Strikethrough => fmts.strike = true,
                             Tag::Link { .. } => {
                                 fmts.link = true;
+                            }
+                            Tag::Table(alignments) => {
+                                table_state = Some(TableState {
+                                    alignments,
+                                    head: Vec::new(),
+                                    rows: Vec::new(),
+                                    current_row: Vec::new(),
+                                    current_cell: Vec::new(),
+                                    in_head: false,
+                                });
+                            }
+                            Tag::TableHead => {
+                                if let Some(ref mut t) = table_state {
+                                    t.in_head = true;
+                                }
+                            }
+                            Tag::TableRow => {
+                                if let Some(ref mut t) = table_state {
+                                    t.current_row = Vec::new();
+                                }
+                            }
+                            Tag::TableCell => {
+                                fmts = ActiveFormats::default();
+                                if let Some(ref mut t) = table_state {
+                                    t.current_cell = Vec::new();
+                                }
                             }
                             _ => {}
                         },
@@ -161,20 +197,57 @@ pub fn show(ui: &mut Ui, app: &mut App, focused: bool) {
                             TagEnd::Link => {
                                 fmts.link = false;
                             }
+                            TagEnd::TableCell => {
+                                if let Some(ref mut t) = table_state {
+                                    t.current_row.push(std::mem::take(&mut t.current_cell));
+                                }
+                            }
+                            TagEnd::TableRow => {
+                                if let Some(ref mut t) = table_state {
+                                    let row = std::mem::take(&mut t.current_row);
+                                    if t.in_head {
+                                        t.head.push(row);
+                                    } else {
+                                        t.rows.push(row);
+                                    }
+                                }
+                            }
+                            TagEnd::TableHead => {
+                                if let Some(ref mut t) = table_state {
+                                    t.in_head = false;
+                                }
+                            }
+                            TagEnd::Table => {
+                                if let Some(t) = table_state.take() {
+                                    render_table(ui, &t);
+                                }
+                            }
                             _ => {}
                         },
                         Event::Text(t) => {
                             if in_code {
                                 code_text.push_str(&t);
+                            } else if let Some(ref mut table) = table_state {
+                                table.current_cell.push((t.to_string(), fmts.clone()));
                             } else {
                                 line_segs.push((t.to_string(), fmts.clone()));
                             }
                         }
                         Event::Code(t) => {
-                            line_segs.push((format!("`{}`", t), ActiveFormats { inline_code: true, ..Default::default() }));
+                            let entry = (format!("`{}`", t), ActiveFormats { inline_code: true, ..Default::default() });
+                            if let Some(ref mut table) = table_state {
+                                table.current_cell.push(entry);
+                            } else {
+                                line_segs.push(entry);
+                            }
                         }
                         Event::SoftBreak | Event::HardBreak => {
-                            line_segs.push(("\n".to_string(), ActiveFormats::default()));
+                            let entry = ("\n".to_string(), ActiveFormats::default());
+                            if let Some(ref mut table) = table_state {
+                                table.current_cell.push(entry);
+                            } else {
+                                line_segs.push(entry);
+                            }
                         }
                         Event::Rule => {
                             ui.add_space(8.0);
@@ -420,5 +493,54 @@ fn quote_frame(ui: &mut Ui, depth: usize, add: impl FnOnce(&mut Ui)) {
             (3.0, color),
         );
         add(ui);
+    });
+}
+
+fn render_table(ui: &mut Ui, table: &TableState) {
+    let bg = Color32::from_rgb(22, 22, 28);
+    let frame = Frame::new()
+        .fill(bg)
+        .corner_radius(6)
+        .inner_margin(Margin::symmetric(12i8, 8i8));
+
+    frame.show(ui, |ui| {
+        egui::Grid::new("table_grid")
+            .striped(true)
+            .min_col_width(100.0)
+            .spacing(egui::vec2(16.0, 6.0))
+            .show(ui, |ui| {
+                let col_aligns = |i: usize| {
+                    let align = table.alignments.get(i).copied().unwrap_or(Alignment::None);
+                    match align {
+                        Alignment::None | Alignment::Left => egui::Align::LEFT,
+                        Alignment::Center => egui::Align::Center,
+                        Alignment::Right => egui::Align::RIGHT,
+                    }
+                };
+
+                for row in &table.head {
+                    for (i, cell) in row.iter().enumerate() {
+                        let mut job = LayoutJob::default();
+                        for (text, fmts) in cell {
+                            let mut fmt = text_format(14.0, fmts);
+                            fmt.font_id = egui::FontId::new(14.0, egui::FontFamily::Name("bold".into()));
+                            job.append(text, 0.0, fmt);
+                        }
+                        ui.with_layout(egui::Layout::top_down(col_aligns(i)), |ui| {
+                            ui.add(egui::Label::new(job).wrap());
+                        });
+                    }
+                    ui.end_row();
+                }
+
+                for row in &table.rows {
+                    for (i, cell) in row.iter().enumerate() {
+                        ui.with_layout(egui::Layout::top_down(col_aligns(i)), |ui| {
+                            ui.add(egui::Label::new(build_job(cell, 14.0)).wrap());
+                        });
+                    }
+                    ui.end_row();
+                }
+            });
     });
 }
