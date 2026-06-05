@@ -309,20 +309,24 @@ impl App {
     fn ui_writing(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         titlebar::show(ui, frame, self);
 
-        let viewport = ui.ctx().viewport_rect();
-        let split = viewport.width() * 0.5;
+        let avail = ui.available_size();
 
-        egui::Panel::left("editor_panel")
-            .resizable(false)
-            .default_size(split)
-            .min_size(200.0)
-            .show_inside(ui, |ui| {
-                editor::show(ui, self);
-            });
+        ui.allocate_ui_with_layout(
+            avail,
+            egui::Layout::left_to_right(egui::Align::TOP),
+            |ui| {
+                let split = ui.available_width() * 0.5;
+                let height = ui.available_height();
 
-        egui::CentralPanel::default().show_inside(ui, |ui| {
-            preview::show(ui, self, false);
-        });
+                ui.allocate_ui(egui::vec2(split, height), |ui| {
+                    editor::show(ui, self);
+                });
+
+                ui.allocate_ui(egui::vec2(ui.available_width(), height), |ui| {
+                    preview::show(ui, self, false);
+                });
+            },
+        );
     }
 
     fn ui_focus(&mut self, ui: &mut egui::Ui) {

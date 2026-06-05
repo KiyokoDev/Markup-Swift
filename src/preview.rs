@@ -246,39 +246,43 @@ fn render_line(ui: &mut Ui, segs: &[(String, ActiveFormats)], ctx: &MdCtx) {
     let level = ctx.list_stack.len();
     let indent = level as f32 * 16.0;
     if indent > 0.0 {
-        ui.horizontal(|ui| {
-            if level > 1 {
-                ui.add_space(indent - 16.0);
-            }
-            let mut job = LayoutJob::default();
-            job.append("- ", 0.0, TextFormat {
+        let mut job = LayoutJob::default();
+        let space = if level > 1 { indent - 16.0 } else { 0.0 };
+        if space > 0.0 {
+            job.append(&" ".repeat(space as usize), 0.0, TextFormat {
                 font_id: egui::FontId::new(14.0, egui::FontFamily::Proportional),
                 color: Color32::from_rgb(210, 210, 215),
                 ..Default::default()
             });
-            for (text, fmts) in segs {
-                job.append(text.as_str(), 0.0, text_format(14.0, fmts));
-            }
-            ui.label(job);
+        }
+        job.append("- ", 0.0, TextFormat {
+            font_id: egui::FontId::new(14.0, egui::FontFamily::Proportional),
+            color: Color32::from_rgb(210, 210, 215),
+            ..Default::default()
         });
+        for (text, fmts) in segs {
+            job.append(text.as_str(), 0.0, text_format(14.0, fmts));
+        }
+        ui.add(egui::Label::new(job).wrap());
     } else if ctx.quote_depth > 0 {
         quote_frame(ui, ctx.quote_depth, |ui| {
-            ui.label(build_job(segs, 14.0));
+            ui.add(egui::Label::new(build_job(segs, 14.0)).wrap());
         });
     } else {
-        ui.horizontal(|ui| {
-            ui.label(build_job(segs, 14.0));
-        });
+        ui.add(egui::Label::new(build_job(segs, 14.0)).wrap());
     }
 }
 
 fn flush_line(ui: &mut Ui, segs: &[(String, ActiveFormats)], ctx: &MdCtx, spacing: bool) {
     if segs.is_empty() || (segs.len() == 1 && segs[0].0.trim().is_empty()) {
+        if spacing {
+            ui.add_space(4.0);
+        }
         return;
     }
 
     if spacing {
-        ui.add_space(4.0);
+        ui.add_space(8.0);
     }
 
     let mut start = 0;
@@ -295,7 +299,7 @@ fn flush_line(ui: &mut Ui, segs: &[(String, ActiveFormats)], ctx: &MdCtx, spacin
     }
 
     if spacing {
-        ui.add_space(2.0);
+        ui.add_space(4.0);
     }
 }
 
@@ -319,13 +323,13 @@ fn flush_heading(ui: &mut Ui, segs: &[(String, ActiveFormats)], level: HeadingLe
     for (i, (text, _)) in segs.iter().enumerate() {
         if text == "\n" {
             if i > start {
-                ui.horizontal(|ui| render_segments(ui, &segs[start..i], size));
+                render_segments(ui, &segs[start..i], size);
             }
             start = i + 1;
         }
     }
     if start < segs.len() {
-        ui.horizontal(|ui| render_segments(ui, &segs[start..], size));
+        render_segments(ui, &segs[start..], size);
     }
     ui.add_space(if level == HeadingLevel::H1 {
         4.0
@@ -381,18 +385,16 @@ fn render_code_block(ui: &mut Ui, code: &str, lang: &str, cache: &mut crate::app
 
         if let Some(lines) = cache.code_cache.get(&key) {
             for line in lines {
-                ui.horizontal(|ui| {
-                    let mut job = LayoutJob::default();
-                    for (r, g, b, text) in line {
-                        let color = Color32::from_rgb(*r, *g, *b);
-                        job.append(text.as_str(), 0.0, TextFormat {
-                            font_id: egui::FontId::new(13.0, egui::FontFamily::Monospace),
-                            color,
-                            ..Default::default()
-                        });
-                    }
-                    ui.label(job);
-                });
+                let mut job = LayoutJob::default();
+                for (r, g, b, text) in line {
+                    let color = Color32::from_rgb(*r, *g, *b);
+                    job.append(text.as_str(), 0.0, TextFormat {
+                        font_id: egui::FontId::new(13.0, egui::FontFamily::Monospace),
+                        color,
+                        ..Default::default()
+                    });
+                }
+                ui.add(egui::Label::new(job).wrap());
             }
         }
     });
