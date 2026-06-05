@@ -227,12 +227,22 @@ impl App {
                                         }
                                     }
                                     if !found {
-                                        self.tabs.push(Tab {
-                                            markdown: content,
-                                            file_path: Some(path),
-                                            dirty: false,
-                                        });
-                                        self.active_tab = self.tabs.len() - 1;
+                                        if self.tabs[self.active_tab].markdown.is_empty()
+                                            && self.tabs[self.active_tab].file_path.is_none()
+                                        {
+                                            self.tabs[self.active_tab] = Tab {
+                                                markdown: content,
+                                                file_path: Some(path),
+                                                dirty: false,
+                                            };
+                                        } else {
+                                            self.tabs.push(Tab {
+                                                markdown: content,
+                                                file_path: Some(path),
+                                                dirty: false,
+                                            });
+                                            self.active_tab = self.tabs.len() - 1;
+                                        }
                                     }
                                 }
                             }
