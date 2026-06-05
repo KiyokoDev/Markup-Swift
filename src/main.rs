@@ -29,6 +29,9 @@ fn main() -> eframe::Result {
         Box::new(|cc| {
             font::configure(&cc.egui_ctx);
 
+            let pp = cc.egui_ctx.pixels_per_point();
+            cc.egui_ctx.set_pixels_per_point(pp.round().max(1.0));
+
             let mut visuals = egui::Visuals::dark();
             theme::apply(&mut visuals);
             cc.egui_ctx.set_visuals(visuals);

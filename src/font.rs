@@ -24,6 +24,7 @@ pub fn configure(ctx: &egui::Context) {
     let prop = fonts.families.get_mut(&FontFamily::Proportional).unwrap();
     prop.clear();
     prop.push("Lexend-Regular".into());
+    prop.push("Lexend-Bold".into());
 
     fonts
         .families
