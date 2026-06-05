@@ -1,11 +1,12 @@
-use std::hash::{Hash, Hasher};
+use std::hash::Hasher;
 use std::sync::LazyLock;
 
 use eframe::egui::{
-    self, Color32, Frame, Margin, Rect, RichText, ScrollArea, Sense, Ui, Vec2,
+    self, Color32, Frame, Margin, Rect, ScrollArea, Sense, Ui, Vec2,
     containers::scroll_area::ScrollBarVisibility,
+    text::{LayoutJob, TextFormat},
 };
-use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 
 use crate::app::App;
 
@@ -126,12 +127,12 @@ pub fn show(ui: &mut Ui, app: &mut App, focused: bool) {
                         },
                         Event::End(tag_end) => match tag_end {
                             TagEnd::Paragraph => {
-                                flush_line(ui, &line_segs, &ctx, focused, true);
+                                flush_line(ui, &line_segs, &ctx, true);
                                 line_segs.clear();
                                 fmts = ActiveFormats::default();
                             }
                             TagEnd::Heading(level) => {
-                                flush_heading(ui, &line_segs, level, focused);
+                                flush_heading(ui, &line_segs, level);
                                 line_segs.clear();
                                 fmts = ActiveFormats::default();
                             }
@@ -146,7 +147,7 @@ pub fn show(ui: &mut Ui, app: &mut App, focused: bool) {
                                 if line_segs.is_empty() {
                                     render_line(ui, &[], &ctx);
                                 } else {
-                                    flush_line(ui, &line_segs, &ctx, focused, false);
+                                    flush_line(ui, &line_segs, &ctx, false);
                                 }
                                 line_segs.clear();
                                 fmts = ActiveFormats::default();
@@ -170,9 +171,7 @@ pub fn show(ui: &mut Ui, app: &mut App, focused: bool) {
                             }
                         }
                         Event::Code(t) => {
-                            let mut c = ActiveFormats::default();
-                            c.inline_code = true;
-                            line_segs.push((format!("`{}`", t), c));
+                            line_segs.push((format!("`{}`", t), ActiveFormats { inline_code: true, ..Default::default() }));
                         }
                         Event::SoftBreak | Event::HardBreak => {
                             line_segs.push(("\n".to_string(), ActiveFormats::default()));
@@ -184,9 +183,7 @@ pub fn show(ui: &mut Ui, app: &mut App, focused: bool) {
                         }
                         Event::TaskListMarker(checked) => {
                             let marker = if checked { "\u{2611}" } else { "\u{2610}" };
-                            let mut c = ActiveFormats::default();
-                            c.inline_code = true;
-                            line_segs.push((format!("{} ", marker), c));
+                            line_segs.push((format!("{} ", marker), ActiveFormats { inline_code: true, ..Default::default() }));
                         }
                         _ => {}
                     }
@@ -195,31 +192,54 @@ pub fn show(ui: &mut Ui, app: &mut App, focused: bool) {
         });
 }
 
-fn render_segments(ui: &mut Ui, segs: &[(String, ActiveFormats)], size: f32) {
-    for (text, fmts) in segs {
-        let mut rt = RichText::new(text.as_str()).size(size);
-
-        if fmts.inline_code {
-            rt = rt.code();
-        } else if fmts.link {
-            rt = rt.clone().color(Color32::from_rgb(90, 170, 250)).underline();
-        } else if fmts.bold {
-            rt = rt.family(egui::FontFamily::Name("bold".into()));
-        }
-
-        if fmts.italic {
-            rt = rt.italics();
-        }
-        if fmts.strike {
-            rt = rt.strikethrough();
-        }
-
-        if !fmts.inline_code && !fmts.link {
-            rt = rt.color(Color32::from_rgb(210, 210, 215));
-        }
-
-        ui.label(rt);
+fn make_font_id(size: f32, fmts: &ActiveFormats) -> egui::FontId {
+    if fmts.bold {
+        egui::FontId::new(size, egui::FontFamily::Name("bold".into()))
+    } else if fmts.inline_code {
+        egui::FontId::new(size, egui::FontFamily::Monospace)
+    } else {
+        egui::FontId::new(size, egui::FontFamily::Proportional)
     }
+}
+
+fn text_format(size: f32, fmts: &ActiveFormats) -> TextFormat {
+    let color = if fmts.link {
+        Color32::from_rgb(90, 170, 250)
+    } else {
+        Color32::from_rgb(210, 210, 215)
+    };
+
+    TextFormat {
+        font_id: make_font_id(size, fmts),
+        color,
+        italics: fmts.italic,
+        underline: if fmts.link {
+            egui::Stroke::new(1.0, Color32::from_rgb(90, 170, 250))
+        } else {
+            egui::Stroke::NONE
+        },
+        strikethrough: if fmts.strike {
+            egui::Stroke::new(1.0, Color32::from_rgb(120, 120, 130))
+        } else {
+            egui::Stroke::NONE
+        },
+        ..Default::default()
+    }
+}
+
+fn build_job(segs: &[(String, ActiveFormats)], size: f32) -> LayoutJob {
+    let mut job = LayoutJob::default();
+    for (text, fmts) in segs {
+        job.append(text.as_str(), 0.0, text_format(size, fmts));
+    }
+    job
+}
+
+fn render_segments(ui: &mut Ui, segs: &[(String, ActiveFormats)], size: f32) {
+    if segs.is_empty() {
+        return;
+    }
+    ui.label(build_job(segs, size));
 }
 
 fn render_line(ui: &mut Ui, segs: &[(String, ActiveFormats)], ctx: &MdCtx) {
@@ -230,21 +250,29 @@ fn render_line(ui: &mut Ui, segs: &[(String, ActiveFormats)], ctx: &MdCtx) {
             if level > 1 {
                 ui.add_space(indent - 16.0);
             }
-            ui.label(RichText::new("- ").size(14.0).color(Color32::from_rgb(210, 210, 215)));
-            render_segments(ui, segs, 14.0);
+            let mut job = LayoutJob::default();
+            job.append("- ", 0.0, TextFormat {
+                font_id: egui::FontId::new(14.0, egui::FontFamily::Proportional),
+                color: Color32::from_rgb(210, 210, 215),
+                ..Default::default()
+            });
+            for (text, fmts) in segs {
+                job.append(text.as_str(), 0.0, text_format(14.0, fmts));
+            }
+            ui.label(job);
         });
     } else if ctx.quote_depth > 0 {
         quote_frame(ui, ctx.quote_depth, |ui| {
-            render_segments(ui, segs, 14.0);
+            ui.label(build_job(segs, 14.0));
         });
     } else {
         ui.horizontal(|ui| {
-            render_segments(ui, segs, 14.0);
+            ui.label(build_job(segs, 14.0));
         });
     }
 }
 
-fn flush_line(ui: &mut Ui, segs: &[(String, ActiveFormats)], ctx: &MdCtx, _focused: bool, spacing: bool) {
+fn flush_line(ui: &mut Ui, segs: &[(String, ActiveFormats)], ctx: &MdCtx, spacing: bool) {
     if segs.is_empty() || (segs.len() == 1 && segs[0].0.trim().is_empty()) {
         return;
     }
@@ -271,18 +299,18 @@ fn flush_line(ui: &mut Ui, segs: &[(String, ActiveFormats)], ctx: &MdCtx, _focus
     }
 }
 
-fn flush_heading(ui: &mut Ui, segs: &[(String, ActiveFormats)], level: pulldown_cmark::HeadingLevel, _focused: bool) {
+fn flush_heading(ui: &mut Ui, segs: &[(String, ActiveFormats)], level: HeadingLevel) {
     if segs.is_empty() {
         return;
     }
     let size = match level {
-        pulldown_cmark::HeadingLevel::H1 => 24.0,
-        pulldown_cmark::HeadingLevel::H2 => 20.0,
-        pulldown_cmark::HeadingLevel::H3 => 17.0,
-        pulldown_cmark::HeadingLevel::H4 => 15.0,
+        HeadingLevel::H1 => 24.0,
+        HeadingLevel::H2 => 20.0,
+        HeadingLevel::H3 => 17.0,
+        HeadingLevel::H4 => 15.0,
         _ => 14.0,
     };
-    ui.add_space(if level == pulldown_cmark::HeadingLevel::H1 {
+    ui.add_space(if level == HeadingLevel::H1 {
         12.0
     } else {
         8.0
@@ -299,7 +327,7 @@ fn flush_heading(ui: &mut Ui, segs: &[(String, ActiveFormats)], level: pulldown_
     if start < segs.len() {
         ui.horizontal(|ui| render_segments(ui, &segs[start..], size));
     }
-    ui.add_space(if level == pulldown_cmark::HeadingLevel::H1 {
+    ui.add_space(if level == HeadingLevel::H1 {
         4.0
     } else {
         2.0
@@ -314,10 +342,10 @@ fn render_code_block(ui: &mut Ui, code: &str, lang: &str, cache: &mut crate::app
     ui.add_space(8.0);
 
     let key = {
-        let mut h = std::collections::hash_map::DefaultHasher::new();
-        code.hash(&mut h);
-        lang.hash(&mut h);
-        h.finish()
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            std::hash::Hash::hash(code, &mut h);
+            std::hash::Hash::hash(lang, &mut h);
+            h.finish()
     };
 
     let bg = Color32::from_rgb(22, 22, 28);
@@ -354,17 +382,16 @@ fn render_code_block(ui: &mut Ui, code: &str, lang: &str, cache: &mut crate::app
         if let Some(lines) = cache.code_cache.get(&key) {
             for line in lines {
                 ui.horizontal(|ui| {
+                    let mut job = LayoutJob::default();
                     for (r, g, b, text) in line {
                         let color = Color32::from_rgb(*r, *g, *b);
-                        ui.add(
-                            egui::Label::new(
-                                RichText::new(text.as_str())
-                                    .size(13.0)
-                                    .family(egui::FontFamily::Monospace)
-                                    .color(color),
-                            ),
-                        );
+                        job.append(text.as_str(), 0.0, TextFormat {
+                            font_id: egui::FontId::new(13.0, egui::FontFamily::Monospace),
+                            color,
+                            ..Default::default()
+                        });
                     }
+                    ui.label(job);
                 });
             }
         }
