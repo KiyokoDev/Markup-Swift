@@ -9,16 +9,16 @@ url="https://github.com/KiyokoDev/Markup-Swift"
 license=('LicenseRef-custom')
 depends=('gcc-libs' 'fontconfig')
 makedepends=('cargo' 'rust')
-source=("$pkgname-$pkgver.tar.gz::https://github.com/KiyokoDev/Markup-Swift/archive/v$pkgver.tar.gz")
-sha256sums=('SKIP')
+source=()
+sha256sums=()
 
 build() {
-    cd "$srcdir/$pkgname-$pkgver"
-    RUSTFLAGS="-C link-arg=-s" cargo build --release --frozen
+    cd "$startdir"
+    RUSTFLAGS="-C link-arg=-s" cargo build --release
 }
 
 package() {
-    cd "$srcdir/$pkgname-$pkgver"
+    cd "$startdir"
 
     install -Dm755 "target/release/$pkgname" "$pkgdir/usr/bin/$pkgname"
     install -Dm644 "resources/$pkgname.desktop" "$pkgdir/usr/share/applications/$pkgname.desktop"
