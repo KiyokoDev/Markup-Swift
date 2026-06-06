@@ -10,22 +10,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup SSH
-        uses: webfactory/ssh-agent@v0.9
+      - name: Push to AUR
+        uses: KSXGitHub/github-actions-deploy-aur@v3
         with:
-          ssh-private-key: ${{ secrets.AUR_SSH_KEY }}
-
-      - name: Push PKGBUILD to AUR
-        run: |
-          git clone ssh://aur@aur.archlinux.org/markup-swift.git /tmp/aur-pkg
-          cp contrib/PKGBUILD contrib/.SRCINFO /tmp/aur-pkg/
-          cd /tmp/aur-pkg
-          git config user.name "${{ secrets.AUR_USERNAME }}"
-          git config user.email "${{ secrets.AUR_EMAIL }}"
-          git add PKGBUILD .SRCINFO
-          if git diff --cached --quiet; then
-            echo "No changes to push"
-          else
-            git commit -m "Update PKGBUILD to ${{ github.ref_name }}"
-            git push origin master
-          fi
+          pkgname: markup-swift
+          pkgbuild: contrib/PKGBUILD
+          commit_username: ${{ secrets.AUR_USERNAME }}
+          commit_email: ${{ secrets.AUR_EMAIL }}
+          ssh_private_key: ${{ secrets.AUR_SSH_KEY }}
