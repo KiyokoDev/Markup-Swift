@@ -1,6 +1,3 @@
 target/
 *.AppImage
 *.AppDir/
-*.tar.gz
-*.pkg.tar.zst
-pkg/

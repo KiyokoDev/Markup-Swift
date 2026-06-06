@@ -1,0 +1,32 @@
+name: Publish to AUR
+
+on:
+  push:
+    tags: 'v*'
+
+jobs:
+  aur:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Push PKGBUILD to AUR
+        env:
+          AUR_SSH_KEY_B64: ${{ secrets.AUR_SSH_KEY_B64 }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$AUR_SSH_KEY_B64" | base64 -d > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/aur -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+          git clone git@aur.archlinux.org:markup-swift.git /tmp/aur-pkg
+          cp contrib/PKGBUILD contrib/.SRCINFO /tmp/aur-pkg/
+          cd /tmp/aur-pkg
+          git config user.name "${{ secrets.AUR_USERNAME }}"
+          git config user.email "${{ secrets.AUR_EMAIL }}"
+          git add PKGBUILD .SRCINFO
+          if git diff --cached --quiet; then
+            echo "No changes to push"
+          else
+            git commit -m "Update PKGBUILD to ${{ github.ref_name }}"
+            git push origin master
+          fi

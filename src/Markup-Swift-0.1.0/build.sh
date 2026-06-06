@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP="Markup-Swift"
+APP="markup-swift"
 ARCH="x86_64"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -108,12 +108,12 @@ cp "resources/$APP.desktop" "$APPDIR/"
 sed -i "s|^Exec=.*|Exec=$APP|" "$APPDIR/$APP.desktop"
 
 # ── 3. AppRun entry point ────────────────────────────────────────
-cat > "$APPDIR/AppRun" << EOF
+cat > "$APPDIR/AppRun" << 'EOF'
 #!/usr/bin/env bash
-HERE="\$(cd "\$(dirname "\$0")" && pwd)"
-export PATH="\$HERE/usr/bin:\$PATH"
-export XDG_DATA_DIRS="\$HERE/usr/share:\$XDG_DATA_DIRS"
-exec "\$HERE/usr/bin/$APP" "\$@"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+export PATH="$HERE/usr/bin:$PATH"
+export XDG_DATA_DIRS="$HERE/usr/share:$XDG_DATA_DIRS"
+exec "$HERE/usr/bin/$APP" "$@"
 EOF
 chmod +x "$APPDIR/AppRun"
 

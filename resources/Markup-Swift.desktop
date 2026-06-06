@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Markup Swift
+Comment=Minimal Markdown Editor
+Exec=Markup-Swift
+Icon=Markup-Swift
+Type=Application
+Terminal=false
+Categories=Office;TextEditor;Development;
+MimeType=text/markdown;text/x-markdown;
+StartupNotify=true
