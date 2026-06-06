@@ -10,14 +10,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup SSH
-        uses: webfactory/ssh-agent@v0.10.0
-        with:
-          ssh-private-key: ${{ secrets.AUR_SSH_KEY }}
-
       - name: Push PKGBUILD to AUR
+        env:
+          AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
         run: |
-          git clone ssh://aur@aur.archlinux.org/markup-swift.git /tmp/aur-pkg
+          mkdir -p ~/.ssh
+          echo "$AUR_SSH_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/aur -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+          git clone git@aur.archlinux.org:markup-swift.git /tmp/aur-pkg
           cp contrib/PKGBUILD contrib/.SRCINFO /tmp/aur-pkg/
           cd /tmp/aur-pkg
           git config user.name "${{ secrets.AUR_USERNAME }}"
