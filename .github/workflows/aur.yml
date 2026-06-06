@@ -12,10 +12,10 @@ jobs:
 
       - name: Push PKGBUILD to AUR
         env:
-          AUR_SSH_KEY_B64: ${{ secrets.AUR_SSH_KEY_B64 }}
+          AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
         run: |
           mkdir -p ~/.ssh
-          echo "$AUR_SSH_KEY_B64" | base64 -d > ~/.ssh/aur
+          echo "$AUR_SSH_KEY" > ~/.ssh/aur
           chmod 600 ~/.ssh/aur
           export GIT_SSH_COMMAND="ssh -i ~/.ssh/aur -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
           git clone git@aur.archlinux.org:markup-swift.git /tmp/aur-pkg
