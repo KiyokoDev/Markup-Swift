@@ -1,0 +1,17 @@
+pkgname = markup-swift
+pkgbase = markup-swift
+pkgver = 0.1.0
+pkgrel = 1
+pkgdesc = A minimal, fast markdown editor with live preview
+url = https://github.com/KiyokoDev/Markup-Swift
+arch = x86_64
+license = custom:CC-BY-NC-SA
+makedepends = cargo
+makedepends = rust
+depends = gtk3
+depends = libxcb
+depends = libxkbcommon
+depends = wayland
+depends = fontconfig
+source = https://github.com/KiyokoDev/Markup-Swift/archive/v0.1.0.tar.gz
+sha256sums = SKIP
